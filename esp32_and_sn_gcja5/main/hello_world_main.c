@@ -8,6 +8,8 @@
 */
 #include "uart.h"
 #include "aqi.h"
+#include "bluetooth.h"
+#include "wifi.h"
 
 void app_main(void)
 {
@@ -15,6 +17,9 @@ void app_main(void)
     const int uart_num = UART_NUM_2;
     QueueHandle_t uart_queue;
     init_uart(uart_num, &uart_queue);
+
+    init_bluetooth();
+    init_wifi();
 
     int counter = 0;
     while (true) {
