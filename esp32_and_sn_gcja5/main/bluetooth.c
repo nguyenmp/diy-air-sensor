@@ -112,11 +112,56 @@ void start_bluetooth_advertising() {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 #define PRIMARY_CHARACTERISTIC_UUID BLE_UUID128_DECLARE( \
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
-#define SECONDARY_CHARACTERISTIC_UUID BLE_UUID128_DECLARE( \
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)
+
+int rand_num = 42;
+
+int write_from_om(struct ble_gatt_access_ctxt *ctxt, void *dest, uint16_t size) {
+    // Validate that we aren't given data of the wrong size
+    uint16_t om_len = OS_MBUF_PKTLEN(ctxt->om);
+    if (om_len != (sizeof rand_num)) {
+        ESP_LOGE(TAG, "Wrong size for write: %d (expected %d)", om_len, (sizeof rand_num));
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    }
+
+    // Perform the actual memory copy, checking that we copied everything fully
+    uint16_t actually_copied_len = 0;
+    int rc = ble_hs_mbuf_to_flat(ctxt->om, &rand_num, om_len, &actually_copied_len);
+    if (actually_copied_len != om_len) {
+        ESP_LOGW(TAG, "Did not fully copy content: %d of %d", actually_copied_len, om_len);
+    }
+    if (rc != 0) {
+        ESP_LOGE(TAG, "ble_hs_mbuf_to_flat failed: %d", rc);
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    // Success!
+    return 0;
+}
 
 int characteristic_access_callback(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg) {
-    ESP_LOGI(TAG, "Accessed a characteristic...");
+    ESP_LOGI(TAG, "Accessed a characteristic with operation: %d", ctxt->op);
+
+    switch (ctxt->op) {
+        case BLE_GATT_ACCESS_OP_READ_CHR:
+        {
+            ESP_LOGI(TAG, "BLE_GATT_ACCESS_OP_READ_CHR");
+            int rc = os_mbuf_append(ctxt->om, &rand_num, sizeof rand_num);
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        }
+        case BLE_GATT_ACCESS_OP_WRITE_CHR:
+        {
+            ESP_LOGI(TAG, "BLE_GATT_ACCESS_OP_WRITE_CHR");
+
+            return write_from_om(ctxt, &rand_num, sizeof rand_num);
+        }
+        case BLE_GATT_ACCESS_OP_READ_DSC:
+        case BLE_GATT_ACCESS_OP_WRITE_DSC:
+            ESP_LOGW(TAG, "Unsupported operation");
+            return 1;
+        default:
+            ESP_LOGE(TAG, "Unknown characteristic access operation: %d", ctxt->op);
+            return 1;
+    }
 
     // This means a successful read
     return 0;
@@ -133,7 +178,7 @@ const struct ble_gatt_svc_def gatt_services[] = {
             {
                 .uuid = PRIMARY_CHARACTERISTIC_UUID,
                 .access_cb = characteristic_access_callback,
-                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_READ_ENC,
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
             },
             {
                 0, /* No more characteristics in this service. */
