@@ -4,6 +4,9 @@
 #include "esp_nimble_hci.h" 
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
+#include "host/ble_gatt.h"  // nimble API
+#include "host/ble_hs_adv.h"  // for ble_hs_adv_fields
+#include "host/ble_gap.h" // for ble_gap_adv_set_fields
 
 const char TAG[] = "bluetooth.c";
 
@@ -60,7 +63,63 @@ void start_bluetooth_stack() {
     ESP_LOGI(TAG, "Finished nimble_port_freertos_init");
 }
 
+int gap_event_handler(struct ble_gap_event *event, void *arg)
+{
+    ESP_LOGI(TAG, "Received GAP event of type: %d", event->type);
+    // It's unknown what the return should be but
+    // the typedef says it should return a int
+    return 0;
+}
+
+// https://mynewt.apache.org/latest/tutorials/ble/bleprph/bleprph-sections/bleprph-adv.html
+void start_bluetooth_advertising() {
+    struct ble_hs_adv_fields fields;
+    int rc;
+    const char *bleprph_device_name = "My ESP32 Hello";
+
+    /* Set the advertisement data included in our advertisements. */
+    memset(&fields, 0, sizeof fields);
+    fields.name = (uint8_t *)bleprph_device_name;
+    fields.name_len = strlen(bleprph_device_name);
+    fields.name_is_complete = 1;
+    rc = ble_gap_adv_set_fields(&fields);
+    if (rc == BLE_HS_ENOTSYNCED) {
+        ESP_LOGE(TAG, "BLE_HS_ENOTSYNCED; rc=%d", rc);
+        return;
+    } if (rc != 0) {
+        ESP_LOGE(TAG, "error setting advertisement data; rc=%d", rc);
+        return;
+    }
+
+    /* Begin advertising. */
+    struct ble_gap_adv_params adv_params;
+    memset(&adv_params, 0, sizeof adv_params);
+    adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
+    adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
+    rc = ble_gap_adv_start(
+        BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER,
+        &adv_params, gap_event_handler, NULL
+    );
+    if (rc != 0) {
+        ESP_LOGE(TAG, "error enabling advertisement; rc=%d", rc);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Finished starting advertising...");
+}
+
+void host_sync_callback(void) {
+    // This is application specific code, where we
+    // choose what to advertise and broadcast data
+    // https://mynewt.apache.org/latest/network/index.html#ble-user-guide
+    start_bluetooth_advertising();
+}
+
 void init_bluetooth() {
     start_bluetooth_stack();
-    start_bluetooth_advertising();
+
+    // We can only start advertising once the host config has
+    // been synced, or else we receive BLE_HS_ENOTSYNCED
+    // https://mynewt.apache.org/latest/tutorials/ble/ibeacon.html
+    ble_hs_cfg.sync_cb = host_sync_callback;
 }
