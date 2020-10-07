@@ -111,7 +111,9 @@ void start_bluetooth_advertising() {
 #define PRIMARY_SERVICE_UUID BLE_UUID128_DECLARE( \
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 #define PRIMARY_CHARACTERISTIC_UUID BLE_UUID128_DECLARE( \
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0)
+#define PRIMARY_DESCRIPTOR_UUID BLE_UUID128_DECLARE( \
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0)
 
 int rand_num = 42;
 
@@ -138,7 +140,7 @@ int write_from_om(struct ble_gatt_access_ctxt *ctxt, void *dest, uint16_t size) 
     return 0;
 }
 
-int characteristic_access_callback(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg) {
+int access_callback(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg) {
     ESP_LOGI(TAG, "Accessed a characteristic with operation: %d", ctxt->op);
 
     switch (ctxt->op) {
@@ -155,8 +157,15 @@ int characteristic_access_callback(uint16_t conn_handle, uint16_t attr_handle, s
             return write_from_om(ctxt, &rand_num, sizeof rand_num);
         }
         case BLE_GATT_ACCESS_OP_READ_DSC:
+        {
+            ESP_LOGI(TAG, "BLE_GATT_ACCESS_OP_READ_DSC");
+            const char description[] = "My fancy characteristic";
+            size_t len = strlen(description);
+            int rc = os_mbuf_append(ctxt->om, &description, len);
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        }
         case BLE_GATT_ACCESS_OP_WRITE_DSC:
-            ESP_LOGW(TAG, "Unsupported operation");
+            ESP_LOGW(TAG, "Unsupported operation BLE_GATT_ACCESS_OP_WRITE_DSC");
             return 1;
         default:
             ESP_LOGE(TAG, "Unknown characteristic access operation: %d", ctxt->op);
@@ -177,8 +186,21 @@ const struct ble_gatt_svc_def gatt_services[] = {
         .characteristics = (struct ble_gatt_chr_def[]) {
             {
                 .uuid = PRIMARY_CHARACTERISTIC_UUID,
-                .access_cb = characteristic_access_callback,
+                .access_cb = access_callback,
                 .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+                .min_key_size = 0,
+                .val_handle = NULL,
+                .descriptors = (struct ble_gatt_dsc_def[]) {
+                    {
+                        .uuid = PRIMARY_DESCRIPTOR_UUID,
+                        .att_flags = BLE_ATT_F_READ,
+                        .access_cb = access_callback,
+                        .min_key_size = 0,
+                    },
+                    {
+                        0, /* No more descriptors */
+                    },
+                },
             },
             {
                 0, /* No more characteristics in this service. */
