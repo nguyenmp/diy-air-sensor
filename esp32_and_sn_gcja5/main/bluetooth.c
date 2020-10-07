@@ -108,6 +108,27 @@ void start_bluetooth_advertising() {
     ESP_LOGI(TAG, "Finished starting advertising...");
 }
 
+#define PRIMARY_SERVICE_UUID BLE_UUID128_DECLARE( \
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+// Struct as documented in:
+// * https://mynewt.apache.org/latest/network/ble_hs/ble_gatts.html#c.ble_gatt_svc_def
+// * https://mynewt.apache.org/latest/network/ble_hs/ble_gatts.html#c.ble_gatt_chr_def
+const struct ble_gatt_svc_def gatt_services[] = {
+    {
+        .type = BLE_GATT_SVC_TYPE_PRIMARY,
+        .uuid = PRIMARY_SERVICE_UUID,
+        .characteristics = (struct ble_gatt_chr_def[]) {
+            {
+                0, /* No more characteristics in this service. */
+            },
+        },
+    },
+    {
+        0, // No more services in this array
+    },
+};
+
 void host_sync_callback(void) {
     // This is application specific code, where we
     // choose what to advertise and broadcast data
@@ -115,8 +136,37 @@ void host_sync_callback(void) {
     start_bluetooth_advertising();
 }
 
+void initialize_services(void) {
+    // This function was undocumented in the official tutorial:
+    // https://mynewt.apache.org/latest/tutorials/ble/bleprph/bleprph-sections/bleprph-svc-reg.html
+    // However, it was in the following example:
+    // https://github.com/apache/mynewt-core/blob/master/apps/bsnprph/src/gatt_svr.c#L115-L131
+    // Without the call to ble_gatts_count_cfg, you will not see the service addition
+    int rc = ble_gatts_count_cfg(gatt_services);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "error ble_gatts_count_cfg; rc=%d", rc);
+        assert(rc == 0);
+    } else {
+        ESP_LOGI(TAG, "Finished ble_gatts_count_cfg");
+    }
+
+    rc = ble_gatts_add_svcs(gatt_services);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "error ble_gatts_add_svcs; rc=%d", rc);
+        assert(rc == 0);
+    } else {
+        ESP_LOGI(TAG, "Finished ble_gatts_add_svcs");
+    }
+
+    ble_gatts_start();
+}
+
 void init_bluetooth() {
+    // Hook up the OS and drivers and stuff
     start_bluetooth_stack();
+
+    // Load up our services which is a table of characteristics we are sharing
+    initialize_services();
 
     // We can only start advertising once the host config has
     // been synced, or else we receive BLE_HS_ENOTSYNCED
