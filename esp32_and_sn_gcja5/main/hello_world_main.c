@@ -10,6 +10,7 @@
 #include "aqi.h"
 #include "bluetooth.h"
 #include "wifi.h"
+#include "sn_gcja5.h"
 
 void app_main(void)
 {
