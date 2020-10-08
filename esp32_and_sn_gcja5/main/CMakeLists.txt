@@ -1,4 +1,4 @@
-set(srcs "hello_world_main.c"
+set(srcs "main.c"
          "uart.c"
          "aqi.c"
          "bluetooth.c"
