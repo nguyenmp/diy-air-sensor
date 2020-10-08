@@ -2,6 +2,8 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 
+#include <string.h>
+
 static const char *TAG = "scan";
 
 static void event_handler(void* arg, esp_event_base_t event_base,
@@ -33,18 +35,27 @@ static void fast_scan(void)
     // Initialize default station as network interface instance (esp-netif)
     esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
     assert(sta_netif);
+}
 
+void start_wifi(uint8_t ssid[32], uint8_t passwd[64])
+{
     // Initialize and start WiFi
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = "DEFAULT_SSID",
-            .password = "DEFAULT_PWD",
-            .scan_method = WIFI_ALL_CHANNEL_SCAN,
-            .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
-            .threshold.rssi = -127,
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
-        },
+    wifi_sta_config_t station_config = {
+        .scan_method = WIFI_ALL_CHANNEL_SCAN,
+        .threshold.rssi = -127,
+        .threshold.authmode = WIFI_AUTH_WPA2_PSK,
     };
+
+    // These sizes are defined in wifi_sta_config_t
+    memcpy(station_config.ssid, ssid, 32);
+    memcpy(station_config.password, passwd, 64);
+    printf("Connecting to: %s\n", station_config.ssid);
+
+    wifi_config_t wifi_config = {
+        .sta = station_config,
+    };
+
+    // The actual work
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());

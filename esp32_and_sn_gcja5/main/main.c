@@ -15,6 +15,10 @@ void app_main(void)
     init_bluetooth();
     init_wifi();
 
+    unsigned char ssid[] = "wifi name";
+    unsigned char passwd[] = "password";
+    start_wifi(ssid, passwd);
+
     int counter = 0;
     while (true) {
         // Sleep for 1 second
