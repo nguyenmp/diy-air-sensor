@@ -4,6 +4,8 @@ Repository containing the code for my personal DIY air sensor.
 
 My initial version was based on the hello_world example from esp_idf.  It uses the Panasonic SN-GCJA5 air sensor reading off of UART.  The code runs on the ESP32-PICO-DEV board which has a UART driver and header pins for easy dupont contacts/housing.
 
+Note, you need the ESP-IDF framework to build this project: https://github.com/espressif/esp-idf/
+
 To build:
 
 ```
@@ -12,7 +14,9 @@ cd diy-air-sensor/esp32_and_sn_gcja5/
 idf.py -p /dev/cu.usbserial-1450 build flash monitor
 ```
 
-If it works, this outputs:
+You will probably need to change the path to the serial port for your machine.  I'm not sure if an automatic way to discover it.
+
+If it works, this outputs the AQI for each PM range:
 
 ```
 PM 1.0: 41, PM 2.5: 70 PM 10: 113
